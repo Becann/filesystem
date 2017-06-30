@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:context="http://www.springframework.org/schema/context"
+	xmlns:aop="http://www.springframework.org/schema/aop" xmlns:tx="http://www.springframework.org/schema/tx"
+	xmlns:ehcache="http://ehcache-spring-annotations.googlecode.com/svn/schema/ehcache-spring"
+	xmlns:jaxws="http://cxf.apache.org/jaxws"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans
+           http://www.springframework.org/schema/beans/spring-beans-2.5.xsd
+           http://www.springframework.org/schema/context
+           http://www.springframework.org/schema/context/spring-context-2.5.xsd
+           http://www.springframework.org/schema/aop http://www.springframework.org/schema/aop/spring-aop-2.5.xsd
+           http://www.springframework.org/schema/tx http://www.springframework.org/schema/tx/spring-tx-3.0.xsd
+           http://ehcache-spring-annotations.googlecode.com/svn/schema/ehcache-spring http://ehcache-spring-annotations.googlecode.com/svn/schema/ehcache-spring/ehcache-spring-1.1.xsd
+            http://cxf.apache.org/jaxws http://cxf.apache.org/schemas/jaxws.xsd">
+	<!-- 记得修改这里 扫描进容器 -->
+	<context:component-scan base-package="com.cgutech" />
+	
+	<!-- 加载数据库配置 -->
+	<bean id="configProperties" class="org.springframework.beans.factory.config.PropertiesFactoryBean">
+        <property name="locations">
+            <list>  
+              <value>classpath:jdbc.properties</value>
+              <value>classpath:system.properties</value>
+           </list>
+        </property>
+    </bean>
+	<bean id="propertyConfigurer" class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">  
+		<property name="properties" ref="configProperties" />
+    </bean>
+
+	<!-- 配置数据源 -->
+	<bean id="dataSource" class="com.mchange.v2.c3p0.ComboPooledDataSource"
+		destroy-method="close">
+		<property name="driverClass" value="${obu.jdbc.driver}" />
+		<property name="jdbcUrl" value="${obu.jdbc.url}" />
+		<property name="user" value="${obu.jdbc.user}" />
+		<property name="password" value="${obu.jdbc.password}" />
+		<!--初始化时获取的连接数，取值应在minPoolSize与maxPoolSize之间。Default: 3 -->
+		<property name="initialPoolSize" value="5" />
+		<!--连接池中保留的最小连接数。 -->
+		<property name="minPoolSize" value="5" />
+		<!--连接池中保留的最大连接数。Default: 15 -->
+		<property name="maxPoolSize" value="20" />
+		<!--最大空闲时间,60秒内未使用则连接被丢弃。若为0则永不丢弃。Default: 0 -->
+		<property name="maxIdleTime" value="60" />
+		<!--当连接池中的连接耗尽的时候c3p0一次同时获取的连接数。Default: 3 -->
+		<property name="acquireIncrement" value="10" />
+		<!--每60秒检查所有连接池中的空闲连接。Default: 0 -->
+		<property name="idleConnectionTestPeriod" value="60" />
+		<!--当连接池用完时客户端调用getConnection()后等待获取新连接的时间，超时后将抛出    SQLException,如设为0则无限期等待。单位毫秒。Default: 0 -->
+		<property name="checkoutTimeout" value="1000"/>
+		<!--JDBC的标准参数，用以控制数据源内加载的PreparedStatements数量。但由于预缓存的statements  
+  		属于单个connection而不是整个连接池。所以设置这个参数需要考虑到多方面的因素。  
+ 	 	如果maxStatements与maxStatementsPerConnection均为0，则缓存被关闭。Default: 0-->
+		<property name="maxStatements" value="0"/>
+		<property name="maxStatementsPerConnection" value="0"/>
+	</bean>
+
+	<bean id="sessionFactory"
+		class="org.springframework.orm.hibernate3.annotation.AnnotationSessionFactoryBean">
+		<property name="dataSource" ref="dataSource" />
+
+		<property name="annotatedClasses">
+			<list>
+			     <value>com.cgutech.filesystem.dd.entity.DdUserEntity</value>
+			     <value>com.cgutech.filesystem.dd.entity.DepartmentEntity</value>
+			     <value>com.cgutech.filesystem.entity.FileEntity</value>
+			</list>
+		</property>
+		<property name="hibernateProperties">
+			<value>
+				hibernate.dialect=org.hibernate.dialect.MySQL5Dialect
+				hibernate.hbm2ddl.auto=update
+				hibernate.format_sql=true
+				hibernate.show_sql=true
+			</value>
+		</property>
+	</bean>
+<!-- 配置缓存 -->
+	<!-- <ehcache:annotation-driven cache-manager="cacheManager" />
+ 
+    <ehcache:config cache-manager="cacheManager">
+        <ehcache:evict-expired-elements interval="60" />
+    </ehcache:config> -->
+	<bean id="txManager" name="transactionManager"
+		class="org.springframework.orm.hibernate3.HibernateTransactionManager">
+		<property name="sessionFactory" ref="sessionFactory" />
+	</bean>
+	<!--使用基于注解方式配置事务 -->
+	<tx:annotation-driven transaction-manager="txManager" />
+  
+	<bean id="jdbcExceptionTranslator"
+		class="org.springframework.jdbc.support.SQLErrorCodeSQLExceptionTranslator">
+		<property name="dataSource">
+			<ref bean="dataSource" />
+		</property>
+	</bean>
+
+	<bean id="hibernateTemplate" class="org.springframework.orm.hibernate3.HibernateTemplate">
+		<property name="sessionFactory">
+			<ref bean="sessionFactory" />
+		</property>
+		<property name="jdbcExceptionTranslator">
+			<ref bean="jdbcExceptionTranslator" />
+		</property>
+	</bean>
+
+<!-- 	<bean id="mailSender" class="org.springframework.mail.javamail.JavaMailSenderImpl">
+		<property name="host">
+			<value>${logs.server.mail.host}</value>
+		</property>
+		<property name="javaMailProperties">
+			<props>
+				<prop key="mail.smtp.auth">${logs.server.mail.smtp.auth}</prop>
+				<prop key="mail.smtp.timeout">25000</prop>
+				<prop key="mail.smtp.socketFactory.fallback">false</prop>
+				<prop key="mail.smtp.starttls.enable">true</prop>
+				这里是配置ssl 主要是个，Gmail <prop key="mail.smtp.socketFactory.class">javax.net.ssl.SSLSocketFactory</prop>
+			</props>
+		</property>
+		<property name="username">
+			<value>${logs.server.mail.username}</value>
+		</property>
+		<property name="password">
+			<value>${logs.server.mail.password}</value>
+		</property>
+		<property name="port">
+			<value>${logs.server.mail.port}</value>
+		</property>
+		<property name="defaultEncoding" value="UTF-8"/>
+
+		Gmail端口 <property name="port"> <value>465</value> </property>
+	</bean>
+	
+	<bean id="fileServiceImpl" class="com.cgutech.log.file.service.FileServiceImpl">
+		<property name="savePath">
+			<value>${logs.server.log.savePath}</value>
+		</property>
+	</bean>
+	
+	<bean id="mailService" class="com.cgutech.log.mail.service.MailServiceImpl">
+		<property name="sendTo">
+			<value>${logs.server.mail.sendTo}</value>
+		</property>
+	</bean> -->
+	
+	<!-- 定时任务 -->
+	<!-- <bean id="obuStateTimeTask" class="com.cgutech.monitor.task.ObuStateTimeTask"/>
+    <bean id="obuStateConllectMethod" class="org.springframework.scheduling.quartz.MethodInvokingJobDetailFactoryBean">  
+	    <property name="targetObject">  
+	        <ref bean="obuStateTimeTask"/>  
+	    </property>  
+	    <property name="concurrent" value="false" />
+	    <property name="targetMethod">  要执行的方法名称  
+	        <value>sendCollectData</value>  
+	    </property>  
+	</bean> -->
+<!-- 	<bean id="obuStateConllectCronTriggerBean" class="org.springframework.scheduling.quartz.CronTriggerBean">  
+	    <property name="jobDetail" ref="obuStateConllectMethod"></property>  
+	    <property name="cronExpression" value="0 0 10 ? * MON"></property>  
+	</bean>
+	
+	======================== 调度工厂 ========================  
+	<bean id="SpringJobSchedulerFactoryBean" class="org.springframework.scheduling.quartz.SchedulerFactoryBean">  
+	    <property name="triggers">  
+	        <list>  
+	            <ref bean="obuStateConllectCronTriggerBean"/>  
+	        </list>  
+	    </property>  
+	</bean> -->
+	<!-- SOAP -->
+	<!-- <import resource="classpath:META-INF/cxf/cxf.xml" />  
+    <import resource="classpath:META-INF/cxf/cxf-extension-soap.xml" />  
+    <import resource="classpath:META-INF/cxf/cxf-servlet.xml" /> -->
+    <!-- <bean id="ws2TestImpl" class="com.cgutech.obu.soap.WS2TestImpl" />
+    <jaxws:endpoint id="ws2test" implementor="#ws2TestImpl" address="/test" /> -->
+</beans>
